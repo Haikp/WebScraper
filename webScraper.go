@@ -1,33 +1,31 @@
 /*
-Name: Kelvin Do
-NSHEID: 2001770482
-Class: CS 326 - 1002
 Description:
-			Given a list of URLs to webscrape
-			Tokenize and parse the url, see its html files
-			obtain full, redirecting links and source images
-			create textfiles to contain found images and urls
-			create directory and download all images
-			use go routines to parallelize the process
+
+	Given a list of URLs to webscrape
+	Tokenize and parse the url, see its html files
+	obtain full, redirecting links and source images
+	create textfiles to contain found images and urls
+	create directory and download all images
+	use go routines to parallelize the process
 */
 package main
 
 import (
 	"fmt"
 	"io"
-	"strings"
-	"os"
-	"time"
-	"path"
 	"net/http"
+	"os"
+	"path"
+	"strings"
+	"time"
 	"golang.org/x/net/html"
 )
 
-//global variable, tracks if a routine has finished
+// global variable, tracks if a routine has finished
 var routineTracker []bool
 
 func main() {
-	urlList := []string {
+	urlList := []string{
 		"https://www.unlv.edu/cs",
 		"https://www.unlv.edu/engineering",
 		"https://www.unlv.edu/engineering/advising-center",
@@ -48,10 +46,10 @@ func main() {
 		"https://www.physics.unlv.edu/",
 	}
 
-	start:= time.Now()
+	start := time.Now()
 
 	//create text file to hold urls
-	urlTxt, err:= os.Create("foundUrls.txt")
+	urlTxt, err := os.Create("foundUrls.txt")
 	if err != nil {
 		panic(err)
 	}
@@ -59,18 +57,18 @@ func main() {
 	defer urlTxt.Close()
 
 	//create text file to hold images
-	imgTxt, err:= os.Create("foundImages.txt")
+	imgTxt, err := os.Create("foundImages.txt")
 	if err != nil {
 		panic(err)
 	}
 
 	defer imgTxt.Close()
 
-	//create channels to find 
+	//create channels to find
 	urlCh := make(chan []byte)
 	imgCh := make(chan []byte)
 
-	for i:= 0; i < len(urlList); i++ {
+	for i := 0; i < len(urlList); i++ {
 		//call individual go routines for each website
 		go webScrape(urlList[i], urlCh, imgCh, i)
 		//create an entry for each routine called
@@ -78,8 +76,8 @@ func main() {
 	}
 
 	moreUrls := true
-    moreImgs := true
-    var urlInput, imgInput []byte
+	moreImgs := true
+	var urlInput, imgInput []byte
 
 	//creates a new directory for the downloaded images
 	dirName := "downloadedImages"
@@ -90,23 +88,23 @@ func main() {
 
 	//loop while the channels are both still open
 	for moreUrls == true || moreImgs == true {
-        select {
+		select {
 		//upon an entry for url is found
-        case urlInput, moreUrls = <- urlCh:
+		case urlInput, moreUrls = <-urlCh:
 			//if there are not duplicates
-            if moreUrls == true && dupCheck[string(urlInput)] != true{
-				dupCheck[string(urlInput)] = true;
+			if moreUrls == true && dupCheck[string(urlInput)] != true {
+				dupCheck[string(urlInput)] = true
 				//write to the url text file
 				_, err := urlTxt.Write(urlInput)
 				if err != nil {
 					panic(err)
 				}
-            }
-		//upon an entry found for images
-        case imgInput, moreImgs = <- imgCh:
+			}
+			//upon an entry found for images
+		case imgInput, moreImgs = <-imgCh:
 			//check if there are no duplicates
-            if moreImgs == true && dupCheck[string(imgInput)] != true{
-				dupCheck[string(imgInput)] = true;
+			if moreImgs == true && dupCheck[string(imgInput)] != true {
+				dupCheck[string(imgInput)] = true
 				//write to image file
 				_, err := imgTxt.Write(imgInput)
 				if err != nil {
@@ -114,14 +112,14 @@ func main() {
 				}
 
 				//obtain valid url of the image
-				splitUrl := strings.Split("https://www.unlv.edu" + string(imgInput), "\n")
+				splitUrl := strings.Split("https://www.unlv.edu"+string(imgInput), "\n")
 				fullUrl := splitUrl[0]
-				
+
 				//request access to the url
 				validUrl, err := http.Get(fullUrl)
 				if err != nil {
 					//edge case, if the website has a different domain
-					splitUrl = strings.Split("https://www.physics.unlv.edu/" + string(imgInput), "\n")
+					splitUrl = strings.Split("https://www.physics.unlv.edu/"+string(imgInput), "\n")
 					fullUrl = splitUrl[0]
 					validUrl, err = http.Get(fullUrl)
 					if err != nil {
@@ -133,7 +131,7 @@ func main() {
 
 				//name of the image will be the associating .png/.jpg/.jpeg within the image name
 				splitStr := strings.Split(string(imgInput), "/")
-				lastSplit := splitStr[len(splitStr) - 1]
+				lastSplit := splitStr[len(splitStr)-1]
 
 				locate := strings.Index(lastSplit, ".")
 				var fileName string
@@ -143,7 +141,7 @@ func main() {
 				} else {
 					fileName = lastSplit[0:(locate + 4)]
 				}
-				
+
 				//create the file within the directory created earlier
 				dlImage, err := os.Create(path.Join(dirName, fileName))
 				if err != nil {
@@ -151,18 +149,16 @@ func main() {
 				}
 
 				defer dlImage.Close()
-				
+
 				//copy/download the image into the file
 				_, err = io.Copy(dlImage, validUrl.Body)
 				if err != nil {
 					panic(err)
 				}
-            }
+			}
 		default:
-        }
-    }
-
-
+		}
+	}
 
 	elapsed := time.Since(start)
 	fmt.Printf("Downloads completed in %s \n", elapsed)
@@ -204,7 +200,7 @@ func webScrape(url string, urlCh chan []byte, imgCh chan []byte, pid int) {
 				for _, a := range parser.Attr {
 					//upon finding "src", store the text within it, send to appropriate channel
 					if a.Key == "src" {
-						img :=[ ]byte(a.Val + "\n")
+						img := []byte(a.Val + "\n")
 						//send to image channel
 						imgCh <- img
 						break
@@ -218,7 +214,7 @@ func webScrape(url string, urlCh chan []byte, imgCh chan []byte, pid int) {
 			}
 
 			stringParse(parser)
-		//else statement to check if "<a" tag is found instead
+			//else statement to check if "<a" tag is found instead
 		} else if strings.Contains(token.String(), "<a") {
 			//parse the appropiate line of code
 			parser, err := html.Parse(strings.NewReader(token.String()))
@@ -232,12 +228,12 @@ func webScrape(url string, urlCh chan []byte, imgCh chan []byte, pid int) {
 					//search for "href" and obtain its contents
 					if a.Key == "href" {
 						//make sure the link within "href" contains a full link
-						if strings.Contains(a.Val, "http"){
-							fullUrl :=[]byte(a.Val + "\n")
+						if strings.Contains(a.Val, "http") {
+							fullUrl := []byte(a.Val + "\n")
 							//send to url channel
 							urlCh <- fullUrl
 						}
-						
+
 						break
 					}
 				}
@@ -256,7 +252,7 @@ func webScrape(url string, urlCh chan []byte, imgCh chan []byte, pid int) {
 	routineTracker[pid] = true
 
 	//once all routines have finished, the LAST routine will close the channels
-	for i := 0; i < len(routineTracker); i++{
+	for i := 0; i < len(routineTracker); i++ {
 		//if an entry in the array of routines have not finished, exit the function
 		if routineTracker[i] == false {
 			return
